@@ -245,6 +245,30 @@ soc-automation-pipeline/
 
 [*] Done. Processed 19 alerts. Reports saved to ./reports/
 ```
+---
+
+## Screenshots
+
+### Virtual Machine Setup
+![VM Setup](screenshots/01_virtualbox_setup.png)
+
+### Kali Attack — Port Scan
+![Port Scan](screenshots/02_kali_port_scan.png)
+
+### Kali Attack — Hydra Brute Force
+![Hydra Attack](screenshots/03_kali_hydra_attack.png)
+
+### Kali Attack — SSH Login
+![SSH Login](screenshots/04_kali_ssh_login.png)
+
+### Elastic SIEM — Alerts
+![Alerts](screenshots/05_elastic_alerts.png)
+
+### Elastic SIEM — SSH Event Detail
+![SSH Event](screenshots/06_elastic_ssh_event.png)
+
+### SOC Dashboard
+![Dashboard](screenshots/07_dashboard.png)
 
 ---
 
