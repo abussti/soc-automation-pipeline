@@ -1,11 +1,12 @@
 # SOC Automation Pipeline
 
-### AI-Powered Threat Triage, MITRE ATT&CK Mapping & Incident Response
+### AI-Powered Threat Triage, MITRE ATT&CK Mapping & Federated Machine Learning
 
 ![Python](https://img.shields.io/badge/Python-3.10+-blue?style=flat-square&logo=python)
 ![Elastic](https://img.shields.io/badge/Elastic-SIEM-005571?style=flat-square&logo=elastic)
 ![MITRE ATT&CK](https://img.shields.io/badge/MITRE-ATT%26CK-red?style=flat-square)
 ![Ollama](https://img.shields.io/badge/LLM-Ollama%20%2F%20phi3:mini-black?style=flat-square)
+![Guardora VFL](https://img.shields.io/badge/ML-Guardora%20VFL-purple?style=flat-square)
 ![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)
 
 ---
@@ -14,7 +15,12 @@
 
 This project is a proof-of-concept SOC (Security Operations Centre) automation pipeline that addresses one of the biggest challenges in enterprise security today: **alert fatigue**.
 
-SOC analysts are drowning in thousands of alerts daily — the majority of which are false positives. This pipeline demonstrates how AI can automatically triage, classify, and respond to SIEM alerts without human intervention, mirroring what vendors like Microsoft Sentinel, Palo Alto XSIAM, and CrowdStrike Charlotte AI are actively building and selling.
+SOC analysts are drowning in thousands of alerts daily — the majority of which are false positives. This pipeline demonstrates how AI and federated machine learning can automatically triage, classify, and respond to SIEM alerts without human intervention, mirroring what vendors like Microsoft Sentinel, Palo Alto XSIAM, and CrowdStrike Charlotte AI are actively building and selling.
+
+The pipeline has two layers of intelligence:
+
+- **LLM triage** via Ollama (phi3:mini) for natural language analysis and runbook generation
+- **Federated ML scoring** via Guardora VFL for privacy-preserving false positive classification across distributed data sources
 
 > **This is not just a lab exercise.** It is a working proof-of-concept for a real problem that companies are actively spending millions to solve.
 
@@ -27,10 +33,10 @@ When a security alert fires in Elastic SIEM, instead of an analyst manually inve
 1. **Detects** — Polls Elastic SIEM automatically for new open alerts
 2. **Understands** — Sends the alert to a local LLM (phi3:mini via Ollama) for AI-powered triage
 3. **Contextualises** — Maps the alert to the MITRE ATT&CK framework, identifying the technique, tactic, and predicted next steps in the attack chain
-4. **Scores** — Runs a ML-ready false positive scorer to determine whether the alert is a genuine threat or noise
+4. **Scores (Federated ML)** — Runs a trained GBDT model via Guardora VFL across two federated nodes, each holding different alert features, without either node exposing its raw data to the other
 5. **Responds** — Generates a recommended analyst runbook with immediate containment steps
 6. **Documents** — Produces a formal PDF incident report automatically
-7. **Visualises** — Displays all processed alerts in a real-time web dashboard
+7. **Visualises** — Displays all processed alerts in a real-time web dashboard with VFL-powered scoring
 
 ---
 
@@ -41,33 +47,48 @@ Elastic SIEM (Kibana)
         │
         │  REST API (Elasticsearch Query)
         ▼
-┌─────────────────────────────────────────┐
-│         SOC Automation Pipeline         │
-│                                         │
-│  ┌─────────────┐    ┌────────────────┐  │
-│  │ Alert Parser│───▶│ MITRE Mapper   │  │
-│  └─────────────┘    └────────────────┘  │
-│          │                  │           │
-│          ▼                  ▼           │
-│  ┌─────────────┐    ┌────────────────┐  │
-│  │  FP Scorer  │    │  Ollama LLM    │  │
-│  │  (ML-Ready) │    │  (phi3:mini)   │  │
-│  └─────────────┘    └────────────────┘  │
-│          │                  │           │
-│          └──────────┬───────┘           │
-│                     ▼                   │
-│           ┌──────────────────┐          │
-│           │  PDF Report Gen  │          │
-│           └──────────────────┘          │
-│                     │                   │
-│                     ▼                   │
-│           ┌──────────────────┐          │
-│           │  alert_log.json  │          │
-│           └──────────────────┘          │
-└─────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│               SOC Automation Pipeline                   │
+│                                                         │
+│  ┌─────────────┐    ┌────────────────┐                  │
+│  │ Alert Parser│───▶│ MITRE Mapper  │                  │
+│  └─────────────┘    └────────────────┘                  │
+│          │                  │                           │
+│          ▼                  ▼                           │
+│  ┌─────────────┐    ┌────────────────┐                  │
+│  │  Ollama LLM │    │  PDF Report    │                  │
+│  │ (phi3:mini) │    │  Generator     │                  │
+│  └─────────────┘    └────────────────┘                  │
+│          │                                              │
+│          ▼                                              │
+│  ┌───────────────────────────────────────────────────┐  │
+│  │              Guardora VFL Layer                   │  │
+│  │                                                   │  │
+│  │  ┌─────────────────┐     ┌─────────────────────┐  │  │
+│  │  │  Node 1         │     │  Node 2             │  │  │
+│  │  │  (risk_score,   │     │  (severity,         │  │  │
+│  │  │  source_port,   │◀──▶│  rule_name,         │  │  │
+│  │  │  event features,│     │  hostname,          │  │  │
+│  │  │  target label y)│     │  user features)     │  │  │
+│  │  └─────────────────┘     └─────────────────────┘  │  │
+│  │         │  PSI Record Linkage (no raw data share) │  │
+│  │         │  Federated GBDT Training & Inference    │  │
+│  │         ▼                                         │  │
+│  │  ┌─────────────────┐                              │  │
+│  │  │  FP Score 0–100  │                             │  │
+│  │  │  + Verdict       │                             │  │
+│  │  └─────────────────┘                              │  │
+│  └───────────────────────────────────────────────────┘  │
+│          │                                              │
+│          ▼                                              │
+│   ┌──────────────────┐                                  │
+│   │  alert_log.json  │                                  │
+│   └──────────────────┘                                  │
+└─────────────────────────────────────────────────────────┘
         │
         ▼
-  Flask Dashboard (http://localhost:5000)
+  Flask Dashboard (http://vm-ip:5000)
+  [RUN VFL INFERENCE button triggers full pipeline]
 ```
 
 ---
@@ -92,23 +113,36 @@ Each alert is automatically mapped to the MITRE ATT&CK framework, including:
 - Tactic (e.g. Credential Access)
 - Predicted next steps in the attack chain
 
-### ML False Positive Scorer
+### Federated ML False Positive Scoring (Guardora VFL)
 
-A scoring engine evaluates each alert on multiple weighted factors:
+This is the major upgrade over a standard rule-based scorer. Instead of scoring alerts on a single machine with access to all data, the pipeline uses **Vertical Federated Learning** across two nodes — each holding different feature sets for the same alerts.
 
-- Risk score from Elastic
-- Time of day (off-hours activity weighted higher)
-- Known malicious IP matching
-- Rule fidelity (historically noisy vs. high-signal rules)
-- MITRE tactic severity weighting
+**Why this matters:** In real enterprise environments, alert data is split across teams and systems. Network features sit with the network team. User behaviour data sits with the identity team. Neither team can share raw data with the other for compliance reasons. VFL allows a shared model to be trained and run across these silos without either party exposing their data.
+
+**How it works:**
+
+1. Alert data is split by feature type across two Guardora VFL nodes
+2. **PSI (Private Set Intersection)** identifies which alerts exist on both nodes without revealing the records themselves
+3. A **GBDT (Gradient Boosted Decision Tree)** model is trained federally across both nodes — gradients are exchanged, not raw data
+4. At inference time, new alerts are scored by the federated model and each alert receives a `logit` score (0–1 probability of true positive)
+5. Scores are written back to `alert_log.json` and displayed on the dashboard
+
+**Feature split:**
+
+| Node 1 | Node 2 |
+|--------|--------|
+| risk_score | severity |
+| source_port | rule_name |
+| event_action | hostname |
+| event_outcome | username |
+| target label (y) | event_category |
+| | process |
 
 Each alert receives a **0–100 confidence score** and a verdict:
 
 - `LIKELY TRUE POSITIVE` (≥ 70)
 - `UNCERTAIN — MANUAL REVIEW RECOMMENDED` (40–69)
 - `LIKELY FALSE POSITIVE` (< 40)
-
-> The scorer is architected to be ML-ready: once sufficient labeled data is collected, the rule-based engine can be replaced with a trained `RandomForestClassifier` from scikit-learn with zero changes to the rest of the pipeline.
 
 ### Automated PDF Incident Reports
 
@@ -117,7 +151,7 @@ Every processed alert generates a formal PDF report including:
 - Incident metadata (alert ID, timestamp, rule triggered)
 - Attack details (source IP, target host, username, process)
 - MITRE ATT&CK mapping
-- ML false positive analysis with scoring breakdown
+- VFL false positive score and verdict
 - Full AI triage analysis and runbook
 - Analyst sign-off section
 
@@ -131,8 +165,9 @@ A Flask-powered dashboard visualises the full pipeline output:
 - Top source IPs with hit frequency
 - MITRE ATT&CK technique distribution
 - False positive score histogram
-- ML verdict summary
-- Recent alert log table
+- ML verdict summary (True Positive / Uncertain / False Positive counts)
+- Recent alert log table with per-alert VFL scores
+- **One-click VFL inference button** — triggers the full federated scoring pipeline on demand
 
 ---
 
@@ -143,7 +178,10 @@ A Flask-powered dashboard visualises the full pipeline output:
 | SIEM | Elastic Security / Kibana 9.x |
 | Log Shipping | Filebeat |
 | AI / LLM | Ollama + phi3:mini (3.8B) |
-| ML Scoring | Custom rule-based scorer (scikit-learn ready) |
+| Federated ML | Guardora VFL (Vertical Federated Learning) |
+| ML Model | GBDT (Gradient Boosted Decision Tree) |
+| Record Linkage | PSI (Private Set Intersection) via GRPC |
+| VFL Infrastructure | Docker (two-node setup) + MLflow |
 | PDF Generation | fpdf2 |
 | Dashboard | Flask + Chart.js |
 | Attack Simulation | Kali Linux |
@@ -159,6 +197,7 @@ A Flask-powered dashboard visualises the full pipeline output:
 - Elastic Stack 9.x (Elasticsearch + Kibana + Filebeat)
 - Ollama installed on host machine with GPU support
 - Python 3.10+
+- Docker + Docker Compose (for Guardora VFL)
 
 ### 1. Clone the Repository
 
@@ -199,19 +238,93 @@ WHITELISTED_IPS  = ["your_analyst_machine_ip"]
 KNOWN_BAD_IPS    = ["your_attacker_ip"]
 ```
 
-### 5. Run the Pipeline
+### 5. Set Up Guardora VFL (Two-Node Federated Learning)
+
+The VFL layer requires two Guardora containers running on the same Docker network.
+
+**Node 1 setup** (primary node, holds labelled features):
+```bash
+cd ~/guardora_vfl
+# Configure .env
+GUARDORA_FOLDER="/opt/guardora"
+EXTERNAL_IP=<node1_docker_ip>
+NODE_NAME="MySuperNode1"
+
+docker-compose up -d
+```
+
+**Node 2 setup** (secondary node, holds additional features):
+```bash
+cd ~/guardora_vfl_node2
+# Configure .env
+GUARDORA_FOLDER="/opt/guardora2"
+EXTERNAL_IP=<node2_docker_ip>
+NODE_NAME="MySuperNode2"
+
+docker-compose up -d
+```
+
+**Initialize nodes, exchange keys, and create the project:**
+```bash
+# Initialize both nodes
+curl -X POST "http://localhost:7171/node?name=MySuperNode1"
+curl -X POST "http://localhost:7272/node?name=MySuperNode2"
+
+# Exchange public keys
+curl http://localhost:7272/node/public_key --output /tmp/node2.pub
+curl -X POST http://localhost:7171/remotes \
+  -F "name=MySuperNode2" -F "ip=<node2_ip>" -F "port=7173" -F "file=@/tmp/node2.pub"
+
+curl http://localhost:7171/node/public_key --output /tmp/node1.pub
+curl -X POST http://localhost:7272/remotes \
+  -F "name=MySuperNode1" -F "ip=<node1_ip>" -F "port=7173" -F "file=@/tmp/node1.pub"
+
+# Verify bidirectional connectivity
+curl http://localhost:7171/remotes/MySuperNode2/check_connection
+curl http://localhost:7272/remotes/MySuperNode1/check_connection
+
+# Create project and upload datasets
+curl -X POST "http://localhost:7171/projects/soc-fp-reduction?entity_description=SOC+alerts&expected_data_description=Network+alert+features"
+curl -X POST "http://localhost:7171/projects/soc-fp-reduction/uploads" -F "file=@node1_alerts.csv"
+curl -X POST "http://localhost:7171/projects/soc-fp-reduction/datasets?source=node1_alerts.csv&dataset_name=alerts-dataset-node1&id_feature=ID&target_feature=y"
+
+curl -X POST "http://localhost:7272/projects/soc-fp-reduction/uploads" -F "file=@node2_alerts.csv"
+curl -X POST "http://localhost:7272/projects/soc-fp-reduction/datasets?source=node2_alerts.csv&dataset_name=alerts-dataset-node2&id_feature=ID"
+```
+
+**Train the federated model:**
+```bash
+# Run PSI to find common records across nodes
+curl -X POST "http://localhost:7171/psi_sessions?project_name=soc-fp-reduction&psi_name=alerts-psi" \
+  -H "Content-Type: application/json" \
+  -d '{"datasets": {"MySuperNode1": "alerts-dataset-node1", "MySuperNode2": "alerts-dataset-node2"}}'
+
+# Copy PSI sync to Node 2
+sudo cp /opt/guardora/node/projects/soc-fp-reduction/syncs/alerts-psi.sync \
+        /opt/guardora2/node/projects/soc-fp-reduction/syncs/alerts-psi.sync
+
+# Create task and train
+curl -X POST "http://localhost:7171/projects/soc-fp-reduction/tasks?task_name=fp-classifier&model_type=gbdt&train_psi=alerts-psi&test_psi=alerts-psi" \
+  -H "Content-Type: application/json" -d '{}'
+curl -X POST "http://localhost:7272/projects/soc-fp-reduction/tasks?task_name=fp-classifier&model_type=gbdt&train_psi=alerts-psi&test_psi=alerts-psi" \
+  -H "Content-Type: application/json" -d '{}'
+
+curl -X POST "http://localhost:7171/train_sessions?project_name=soc-fp-reduction&task_name=fp-classifier"
+```
+
+### 6. Run the Pipeline
 
 ```bash
 python3 soc_automation.py
 ```
 
-### 6. Run the Dashboard
+### 7. Run the Dashboard
 
 ```bash
-python3 dashboard.py
+python3 gvfl_soc_dashboard.py
 ```
 
-Open `http://your_vm_ip:5000` in your browser.
+Open `http://your_vm_ip:5000` in your browser. Click **RUN VFL INFERENCE** to score all alerts using the federated model.
 
 ---
 
@@ -220,10 +333,12 @@ Open `http://your_vm_ip:5000` in your browser.
 ```
 soc-automation-pipeline/
 │
-├── soc_automation.py       # Main pipeline script
-├── dashboard.py            # Flask web dashboard
-├── .gitignore              # Files to exclude from version control
-└── README.md               # Project documentation
+├── soc_automation.py         # Main pipeline script (Elastic + LLM + PDF)
+├── gvfl_soc_dashboard.py     # Flask dashboard with Guardora VFL integration
+├── node1_alerts.csv          # Training data for VFL Node 1 (labelled features)
+├── node2_alerts.csv          # Training data for VFL Node 2 (additional features)
+├── .gitignore
+└── README.md
 ```
 
 ---
@@ -239,12 +354,23 @@ soc-automation-pipeline/
 
 [+] Processing alert: SSH Brute Force | Severity: high | Source: 192.168.56.101
     MITRE: T1110 - Brute Force
-    FP Score: 85/100 — LIKELY TRUE POSITIVE
     Sending to Ollama for triage...
     Report saved: reports/incident_a3f2b1c4_2026-03-12.pdf
 
 [*] Done. Processed 19 alerts. Reports saved to ./reports/
 ```
+
+### VFL Inference API
+
+```json
+POST /api/run-inference
+{
+  "success": true,
+  "total": 19,
+  "updated": 19
+}
+```
+
 ---
 
 ## Screenshots
@@ -267,8 +393,17 @@ soc-automation-pipeline/
 ### Elastic SIEM — SSH Event Detail
 ![SSH Event](screenshots/06_elastic_ssh_event.png)
 
-### SOC Dashboard
-![Dashboard](screenshots/07_dashboard.png)
+### SOC Dashboard (Before VFL)
+![Dashboard Before](screenshots/07_dashboard.png)
+
+### SOC Dashboard (After VFL Integration)
+![Dashboard After VFL](screenshots/08_dashboard_vfl.png)
+
+### Guardora VFL — Two-Node Setup
+![VFL Nodes](screenshots/09_vfl_nodes.png)
+
+### Guardora VFL — Federated Training
+![VFL Training](screenshots/10_vfl_training.png)
 
 ---
 
@@ -282,18 +417,21 @@ This project directly mirrors what enterprise security vendors are building:
 | Palo Alto | XSIAM | Automated incident response |
 | CrowdStrike | Charlotte AI | Natural language threat investigation |
 | Splunk | SOAR | Automated runbook generation |
+| Various | Privacy-preserving ML platforms | Federated learning across data silos |
 
-The core problem — analysts spending hours manually triaging alerts that turn out to be false positives — costs enterprises millions annually. AI triage is the industry's proposed solution and this pipeline demonstrates that architecture at a functional level.
+The federated ML layer addresses a problem that goes beyond alert fatigue: **data sovereignty**. In large enterprises, security data cannot be centralised due to compliance requirements (GDPR, HIPAA, etc.). VFL allows collaborative model training across isolated data sources — exactly what real-world multi-team SOC environments require.
 
 ---
 
 ## Future Improvements
 
-- Replace rule-based FP scorer with a trained `RandomForestClassifier` once labeled data is sufficient
+- Collect real analyst-labeled alert data to retrain the VFL model with ground truth
 - Add email / Slack notifications when high-severity true positives are detected
-- Implement continuous polling with configurable intervals
+- Implement continuous polling with configurable intervals and auto-inference on new alerts
 - Integrate threat intelligence feeds (VirusTotal, AbuseIPDB) for IP enrichment
 - Add user authentication to the dashboard
+- Extend to three or more VFL nodes (e.g. endpoint telemetry, network flows, identity logs)
+- Replace phi3:mini with a larger model for improved triage quality
 
 ---
 
@@ -307,4 +445,4 @@ Cybersecurity Student | Aspiring SOC Analyst
 
 ---
 
-*Built as a proof-of-concept demonstrating AI-assisted SOC automation. All testing performed in an isolated lab environment.*
+*Built as a proof-of-concept demonstrating AI-assisted SOC automation with privacy-preserving federated machine learning. All testing performed in an isolated lab environment.*
